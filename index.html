@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>鋼構 3D 展示</title>
+<style>
+  :root{ --bg:#0b0f16; --card:#141b27; --line:rgba(255,255,255,.12); --fg:#e8edf3; --dim:rgba(232,237,243,.62); --accent:#e0632c; }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--fg);
+    font-family:system-ui,-apple-system,"Noto Sans TC","Microsoft JhengHei",sans-serif;-webkit-text-size-adjust:100%}
+  .wrap{max-width:960px;margin:0 auto;padding:24px 16px 56px}
+  header{padding:16px 0 20px;border-bottom:1px solid var(--line);margin-bottom:20px}
+  h1{margin:0;font-size:22px;letter-spacing:.5px}
+  .sub{margin-top:6px;font-size:13px;color:var(--dim)}
+  #q{width:100%;margin:16px 0 0;padding:11px 14px;font:inherit;font-size:15px;color:var(--fg);
+    background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:10px;outline:none}
+  #q:focus{border-color:var(--accent)}
+  #list{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));margin-top:18px}
+  a.card{display:block;padding:16px;background:var(--card);border:1px solid var(--line);border-radius:14px;
+    color:inherit;text-decoration:none;transition:border-color .15s,transform .15s}
+  a.card:hover{border-color:var(--accent);transform:translateY(-2px)}
+  a.card:active{transform:none}
+  .t{font-size:16px;font-weight:600;line-height:1.4}
+  .d{margin-top:6px;font-size:13px;color:var(--dim);line-height:1.5}
+  .m{margin-top:10px;font-size:11px;color:var(--dim);opacity:.8}
+  .tag{display:inline-block;margin-bottom:8px;padding:2px 8px;border-radius:999px;font-size:11px;
+    background:rgba(224,99,44,.16);color:#f0a07c;border:1px solid rgba(224,99,44,.35)}
+  .note{padding:16px;border:1px dashed var(--line);border-radius:12px;color:var(--dim);font-size:14px;line-height:1.7}
+  code{background:rgba(255,255,255,.08);padding:1px 5px;border-radius:4px;font-size:12px}
+  footer{margin-top:32px;font-size:12px;color:var(--dim)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>鋼構 3D 展示</h1>
+    <div class="sub">點選下方項目即可在瀏覽器中檢視 3D 模型，手機、電腦皆可操作。</div>
+    <input id="q" type="search" placeholder="搜尋模型名稱…" autocomplete="off">
+  </header>
+
+  <div id="list"></div>
+  <div id="msg"></div>
+
+  <footer>
+    模型清單於每次 commit 時自動由 <code>3d/</code> 資料夾產生。
+    <span id="gen"></span>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var listEl = document.getElementById('list');
+  var msgEl  = document.getElementById('msg');
+  var qEl    = document.getElementById('q');
+  var models = [];
+
+  function note(html) { msgEl.innerHTML = '<div class="note">' + html + '</div>'; }
+
+  function fmtSize(n) {
+    if (!n && n !== 0) return '';
+    return n < 1024 * 1024 ? Math.round(n / 1024) + ' KB'
+                           : (n / 1048576).toFixed(1) + ' MB';
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+    });
+  }
+
+  function render(items) {
+    if (!items.length) { listEl.innerHTML = ''; note('沒有符合的模型。'); return; }
+    msgEl.innerHTML = '';
+    listEl.innerHTML = items.map(function (m) {
+      var meta = [m.mtime, fmtSize(m.size)].filter(Boolean).join('　·　');
+      return '<a class="card" href="3d/' + encodeURIComponent(m.file) + '">'
+           + '<span class="tag">3D</span>'
+           + '<div class="t">' + esc(m.title || m.file) + '</div>'
+           + (m.desc ? '<div class="d">' + esc(m.desc) + '</div>' : '')
+           + (meta ? '<div class="m">' + esc(meta) + '</div>' : '')
+           + '</a>';
+    }).join('');
+  }
+
+  qEl.addEventListener('input', function () {
+    var k = qEl.value.trim().toLowerCase();
+    render(!k ? models : models.filter(function (m) {
+      return ((m.title || '') + (m.desc || '') + m.file).toLowerCase().indexOf(k) >= 0;
+    }));
+  });
+
+  fetch('models.json?t=' + Date.now(), { cache: 'no-store' })
+    .then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(function (data) {
+      models = (data.models || []).slice().sort(function (a, b) {
+        return (a.title || a.file).localeCompare(b.title || b.file, 'zh-Hant');
+      });
+      if (data.generated) {
+        document.getElementById('gen').textContent = '（清單更新：' + data.generated.replace('T', ' ').replace('Z', ' UTC') + '）';
+      }
+      render(models);
+    })
+    .catch(function (e) {
+      listEl.innerHTML = '';
+      note('讀取 <code>models.json</code> 失敗：' + esc(e.message)
+         + '<br>若是直接用檔案總管開啟本頁（file://），瀏覽器會擋住讀取；'
+         + '請透過 GitHub Pages 網址開啟，或在資料夾內執行 <code>python -m http.server</code> 後用 <code>http://localhost:8000</code> 瀏覽。');
+    });
+})();
+</script>
+</body>
+</html>

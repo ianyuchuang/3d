@@ -1,0 +1,5 @@
+#!/bin/sh
+# 每次 commit 前重新產生 models.json 並納入本次提交
+sh tools/gen-models.sh || exit 1
+git add models.json
+exit 0

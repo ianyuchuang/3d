@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>鋼構廠房 3D 展示（手機版）</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;touch-action:none;overscroll-behavior:none;-webkit-user-select:none;user-select:none;background:#0b0f16;font-family:system-ui,-apple-system,"Noto Sans TC","Microsoft JhengHei",sans-serif;color:#e8edf3}
+  #c{display:block;width:100%;height:100%}
+  #hud{position:fixed;left:10px;top:max(10px,env(safe-area-inset-top));background:rgba(10,14,22,.78);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:12px 14px;font-size:13px;line-height:1.55;max-width:min(330px,calc(100vw - 20px));backdrop-filter:blur(6px);transition:opacity .3s}
+  #hud.hide{opacity:0;pointer-events:none}
+  #hud h1{font-size:15px;margin:0 0 6px;font-weight:600}
+  #hud kbd{display:inline-block;min-width:16px;padding:1px 6px;border:1px solid rgba(255,255,255,.3);border-bottom-width:2px;border-radius:4px;font-family:inherit;font-size:12px;background:rgba(255,255,255,.08);text-align:center}
+  #hud .row{margin:2px 0}
+  #hud .dim{opacity:.7}
+  #hud .warn{color:#ffd27a;margin-top:6px}
+  #start{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(5,8,14,.72);cursor:pointer;z-index:9}
+  #start div{background:#141b27;border:1px solid rgba(255,255,255,.15);border-radius:14px;padding:26px 34px;text-align:center;font-size:16px;line-height:1.7;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  #start b{font-size:20px;display:block;margin-bottom:6px}
+  #pos{position:fixed;left:10px;bottom:max(10px,env(safe-area-inset-bottom));font-size:12px;opacity:.7;background:rgba(10,14,22,.6);padding:6px 10px;border-radius:8px}
+  #legend{position:fixed;right:10px;bottom:calc(max(10px,env(safe-area-inset-bottom)) + 58px);max-width:min(320px,calc(100vw - 20px));transition:opacity .3s}
+  #legend.hide{opacity:0;pointer-events:none}
+  #legend{background:rgba(10,14,22,.78);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:10px 14px;font-size:12px;line-height:1.6}
+  #legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-2px}
+  .cross{display:none}
+  #bar{position:fixed;left:50%;transform:translateX(-50%);bottom:max(10px,env(safe-area-inset-bottom));display:flex;gap:6px;background:rgba(10,14,22,.78);border:1px solid rgba(255,255,255,.12);border-radius:999px;padding:6px;backdrop-filter:blur(6px);z-index:5}
+  #bar button,#views button{font:inherit;font-size:13px;color:#e8edf3;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:999px;padding:8px 12px;white-space:nowrap}
+  #bar button:active,#views button:active{background:rgba(255,255,255,.25)}
+  #views{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(max(10px,env(safe-area-inset-bottom)) + 52px);display:none;flex-wrap:wrap;justify-content:center;gap:6px;background:rgba(10,14,22,.85);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:8px;max-width:calc(100vw - 20px);z-index:5}
+  #views.open{display:flex}
+  #toast{position:fixed;left:50%;top:18%;transform:translateX(-50%);background:rgba(10,14,22,.85);color:#fff;padding:8px 14px;border-radius:999px;font-size:13px;opacity:0;transition:opacity .25s;pointer-events:none;z-index:6}
+  #toast.show{opacity:1}
+  @media (max-width:640px){#legend{font-size:11px;line-height:1.45;padding:8px 10px} #hud{font-size:12px;padding:10px 12px} #pos{display:none}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="cross"></div>
+
+<div id="hud">
+  <h1>台南七股 汽車修配廠 — 鋼構示意</h1>
+  <div class="row">單指拖曳 環繞旋轉　雙指捏合 縮放　雙指拖曳 平移</div>
+  <div class="row"><b>長按</b>畫面上任一構件 → 設為錨點（旋轉/縮放中心）</div>
+  <div class="row">滑鼠：左鍵拖曳旋轉、滾輪縮放、右鍵拖曳平移、按住 0.5 秒設錨點</div>
+  <div class="dim row">格線 1–3：12 m × 2　格線 A–C：9 m × 2　屋緣 GL+9.15 m、屋脊 GL+10.25 m</div>
+</div>
+
+<div id="legend" class="force">
+  <div><i style="background:#3b6ea8"></i>鋼柱 SC1 / WC1 / SP1（SN490B/400B）</div>
+  <div><i style="background:#e0632c"></i>鋼梁（Sba1/Sba2/Sga/SB1/SG1/Sg1/Sb1/SG2）</div>
+  <div><i style="background:#c9a227"></i>天車梁 CGA / 托梁 CBA（不計入）</div>
+  <div><i style="background:#8f8f8f"></i>RC 柱梁 / 基礎 / 樓版</div>
+  <div><i style="background:#6d7d8f"></i>桁條 PR1 / GT1、斜撐 HB1</div>
+  <div style="margin-top:6px;opacity:.85">鋼梁總重量 ≈ <b>24,403 kg</b></div>
+</div>
+
+<div id="pos"></div>
+<div id="bar">
+  <button data-act="clad">外牆 ●</button>
+  <button data-act="grid">格線</button>
+  <button data-act="views">視角</button>
+  <button data-act="ui">隱藏說明</button>
+  <button data-act="reset">重設</button>
+</div>
+<div id="views"><button data-v="front">正面 (Line A)</button><button data-v="aerial">鳥瞰</button><button data-v="inside">室內</button><button data-v="roof">屋架</button><button data-v="mf">MF 平台</button><button data-v="crane">天車</button></div>
+<div id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+'use strict';
+// ---------- 基本設定 ----------
+const canvas=document.getElementById('c');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,/Mobi|Android/i.test(navigator.userAgent)?1.5:2));
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.outputEncoding=THREE.sRGBEncoding;
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x9fc3e6);
+scene.fog=new THREE.Fog(0x9fc3e6,60,220);
+
+const camera=new THREE.PerspectiveCamera(70,1,0.05,500);
+
+// ---------- 燈光 ----------
+scene.add(new THREE.HemisphereLight(0xdfe9f5,0x5b6b55,0.75));
+const sun=new THREE.DirectionalLight(0xfff3dd,1.1);
+sun.position.set(30,45,-20);
+sun.castShadow=true;
+const SHADOW=/Mobi|Android/i.test(navigator.userAgent)?1024:2048; sun.shadow.mapSize.set(SHADOW,SHADOW);
+const sc=sun.shadow.camera; sc.left=-40;sc.right=40;sc.top=40;sc.bottom=-40;sc.near=1;sc.far=140;
+sun.shadow.bias=-0.0006;
+scene.add(sun);
+
+// ---------- 材質 ----------
+const M={
+  steelCol:new THREE.MeshStandardMaterial({color:0x3b6ea8,metalness:.55,roughness:.45}),
+  steelBeam:new THREE.MeshStandardMaterial({color:0xe0632c,metalness:.5,roughness:.5}),
+  crane:new THREE.MeshStandardMaterial({color:0xc9a227,metalness:.6,roughness:.4}),
+  rc:new THREE.MeshStandardMaterial({color:0x8f8f8f,roughness:.95}),
+  slab:new THREE.MeshStandardMaterial({color:0xa9a9a4,roughness:.95}),
+  purlin:new THREE.MeshStandardMaterial({color:0x6d7d8f,metalness:.4,roughness:.6}),
+  rod:new THREE.MeshStandardMaterial({color:0x55636f,metalness:.6,roughness:.4}),
+  clad:new THREE.MeshStandardMaterial({color:0xd8dde2,roughness:.6,metalness:.25,side:THREE.DoubleSide,transparent:true,opacity:1}),
+  roof:new THREE.MeshStandardMaterial({color:0xbfc7cf,roughness:.5,metalness:.35,side:THREE.DoubleSide,transparent:true,opacity:1}),
+  glass:new THREE.MeshStandardMaterial({color:0x9fd0ff,transparent:true,opacity:.35,roughness:.1,metalness:.2,side:THREE.DoubleSide}),
+  ground:new THREE.MeshStandardMaterial({color:0x6f7a68,roughness:1}),
+  pave:new THREE.MeshStandardMaterial({color:0x8a8d8a,roughness:1}),
+  wallIn:new THREE.MeshStandardMaterial({color:0xf2efe6,roughness:.9,side:THREE.DoubleSide}),
+  door:new THREE.MeshStandardMaterial({color:0x2e4a6b,roughness:.6,metalness:.4}),
+  base:new THREE.MeshStandardMaterial({color:0x777777,roughness:.9})
+};
+
+// ---------- 幾何工具 ----------
+// 座標：X = 格線1→3（0~24 m），Z = 格線A→C（0~18 m），Y 向上。GL+0 = y 0。
+// 模型座標 z = 格線 A→C 距離；世界座標 Z = −z，使 A→C 指向螢幕深處，與平面圖方向一致（1 左、3 右、A 前、C 後）
+const root=new THREE.Group(); scene.add(root);
+const W=z=>-z; // 模型 z → 世界 Z
+const structure=new THREE.Group(); root.add(structure);
+const cladGroup=new THREE.Group(); root.add(cladGroup);
+const labelGroup=new THREE.Group(); root.add(labelGroup);
+
+function box(w,h,d,mat,x,y,z,parent){
+  const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+  m.position.set(x,y,W(z)); m.castShadow=true; m.receiveShadow=true;
+  (parent||structure).add(m); return m;
+}
+// 任意兩點間的桿件（斷面 w 寬 × h 高，h 沿局部 Y）
+function member(p1,p2,w,h,mat,parent){
+  const a=new THREE.Vector3(p1[0],p1[1],W(p1[2])), b=new THREE.Vector3(p2[0],p2[1],W(p2[2]));
+  const L=a.distanceTo(b);
+  const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,L),mat);
+  m.position.copy(a).add(b).multiplyScalar(.5);
+  m.lookAt(b);
+  m.castShadow=true; m.receiveShadow=true;
+  (parent||structure).add(m); return m;
+}
+// H 型鋼（三塊板組成），axis: 'y' 直立柱 / 'x' 沿X向梁 / 'z' 沿Z向梁 ；H 深, B 寬, tw, tf (m)
+function hSection(H,B,tw,tf,L,mat){
+  const g=new THREE.Group();
+  const fl=(y)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(B,tf,L),mat);m.position.y=y;m.castShadow=m.receiveShadow=true;g.add(m);};
+  fl(H/2-tf/2); fl(-H/2+tf/2);
+  const web=new THREE.Mesh(new THREE.BoxGeometry(tw,H-2*tf,L),mat); web.castShadow=web.receiveShadow=true; g.add(web);
+  return g; // 長度沿局部 Z，深度沿局部 Y
+}
+function hMember(p1,p2,H,B,tw,tf,mat,parent){
+  const a=new THREE.Vector3(p1[0],p1[1],W(p1[2])), b=new THREE.Vector3(p2[0],p2[1],W(p2[2]));
+  const g=hSection(H,B,tw,tf,a.distanceTo(b),mat);
+  g.position.copy(a).add(b).multiplyScalar(.5);
+  g.lookAt(b);
+  // lookAt 後局部 Y 仍為世界 Y（若桿件近水平），對直立柱要另處理
+  (parent||structure).add(g); return g;
+}
+function hColumn(x,z,y0,y1,H,B,tw,tf,mat,rotY){
+  const g=hSection(H,B,tw,tf,y1-y0,mat);
+  g.rotation.x=-Math.PI/2; // 長度沿世界 Y
+  const wrap=new THREE.Group(); wrap.add(g);
+  wrap.position.set(x,(y0+y1)/2,W(z));
+  wrap.rotation.y=rotY||0;
+  structure.add(wrap); return wrap;
+}
+
+// ---------- 建築參數 (m) ----------
+const LX=24, LZ=18;
+const EAVE=9.15, RIDGE=10.25;
+const roofY=x=>EAVE+(RIDGE-EAVE)*(1-Math.abs(x-12)/12);
+const RING_A=5.2, RING_C=5.2, SGA=6.0, CRANE=6.4, MF=3.15;
+
+// 地面與鋪面
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(400,400),M.ground);
+ground.rotation.x=-Math.PI/2; ground.position.y=-0.02; ground.receiveShadow=true; root.add(ground);
+const pave=new THREE.Mesh(new THREE.PlaneGeometry(LX+12,LZ+12),M.pave);
+pave.rotation.x=-Math.PI/2; pave.position.set(12,-0.01,W(9)); pave.receiveShadow=true; root.add(pave);
+// 廠房樓版 GL+0.3 (地梁上)  → 室內 FL +0.03
+box(LX+0.6,0.30,LZ+0.6,M.slab,12,0.15,9);
+
+// ---------- 基礎 / 鋼柱 SC1 ----------
+const gridX=[0,12,24], gridZ=[0,9,18];
+gridX.forEach(x=>gridZ.forEach(z=>{
+  box(2.0,0.4,2.0,M.base,x,-0.35,z);          // F1 基礎示意
+  box(0.75,0.7,0.75,M.rc,x,0.35,z);           // RC 柱頭 SC1 750x750 (地面段)
+  const top=(z===9&&x===12)?RIDGE: roofY(x);
+  hColumn(x,z,0.3,top,0.35,0.35,0.012,0.019,M.steelCol,0);
+}));
+// WC1 牆柱 RH-244x175：Line A x=6,18；Line C x=5.625, 18.775
+[[6,0],[18,0],[5.625,18],[18.775,18]].forEach(([x,z])=>{
+  hColumn(x,z,0.3,roofY(x),0.244,0.175,0.007,0.011,M.steelCol,Math.PI/2);
+});
+// SC2 RC 柱 700x700（Line C x=5.625，支撐 MF 平台）
+box(0.7,MF,0.7,M.rc,5.625,MF/2,18);
+box(0.7,MF,0.7,M.rc,5.625,MF/2,18-4.45);
+box(0.7,MF,0.7,M.rc,24-1.5,MF/2,18-4.45);
+box(0.7,MF,0.7,M.rc,12,MF/2,18-4.45);
+
+// ---------- 環梁 GL+5200 / GL+6000 ----------
+// Sba1 Line A  RH-400x200
+hMember([0,RING_A,0],[24,RING_A,0],0.4,0.2,0.008,0.013,M.steelBeam);
+// Sba2 Line C  RH-244x175
+hMember([0,RING_C,18],[24,RING_C,18],0.244,0.175,0.007,0.011,M.steelBeam);
+// Sga Line 1、3  RH-400x200
+hMember([0,SGA,0],[0,SGA,18],0.4,0.2,0.008,0.013,M.steelBeam);
+hMember([24,SGA,0],[24,SGA,18],0.4,0.2,0.008,0.013,M.steelBeam);
+
+// ---------- 天車托梁 CBA / 天車梁 CGA（RH-390x300，不計入重量）----------
+gridX.forEach(x=>{
+  gridZ.forEach(z=>{
+    const sides=(x===12)?[-1,1]:(x===0?[1]:[-1]);
+    sides.forEach(s=>box(0.5,0.39,0.3,M.crane,x+s*0.45,CRANE,z)); // CBA 短托梁
+  });
+  const sides=(x===12)?[-1,1]:(x===0?[1]:[-1]);
+  sides.forEach(s=>hMember([x+s*0.45,CRANE,0],[x+s*0.45,CRANE,18],0.39,0.3,0.010,0.016,M.crane)); // CGA
+  // 軌道示意
+  sides.forEach(s=>box(0.08,0.08,18,M.rod,x+s*0.45,CRANE+0.24,9));
+});
+// 天車橋架示意（跨 Line1-2 之間一台）
+(function(){
+  const g=new THREE.Group();
+  const zc=6.5;
+  box(11.1,0.45,0.35,M.crane,6,CRANE+0.55,zc-0.45,g);
+  box(11.1,0.45,0.35,M.crane,6,CRANE+0.55,zc+0.45,g);
+  box(1.4,0.5,1.4,M.rc,4.5,CRANE+0.55,zc,g);
+  member([4.5,CRANE+0.3,zc],[4.5,2.4,zc],0.03,0.03,M.rod,g);
+  box(0.6,0.12,0.15,M.crane,4.5,2.35,zc,g);
+  structure.add(g);
+})();
+
+// ---------- MF 平台 (+3150) ----------
+(function(){
+  const x0=5.625, x1=24, z0=18-4.45, z1=18;
+  hMember([x0,MF,z1],[x1,MF,z1],0.34,0.25,0.009,0.014,M.steelBeam);  // SB1 外側
+  hMember([x0,MF,z0],[x1,MF,z0],0.34,0.25,0.009,0.014,M.steelBeam);  // SB1 內側
+  [x0,12,24].forEach(x=>hMember([x,MF,z0],[x,MF,z1],0.294,0.2,0.008,0.012,M.steelBeam)); // SG2
+  const sg=[x0+6.375/3, x0+6.375*2/3, 15, 18, 21];
+  sg.forEach(x=>hMember([x,MF,z0],[x,MF,z1],0.244,0.175,0.007,0.011,M.steelBeam)); // Sg1
+  box(x1-x0,0.15,4.45,M.slab,(x0+x1)/2,MF+0.17+0.075,(z0+z1)/2); // 鋼承版 SS1 t=150
+  // 欄杆
+  for(let x=x0;x<=x1;x+=1.5){member([x,MF+0.32,z0],[x,MF+1.4,z0],0.04,0.04,M.rod);}
+  member([x0,MF+1.4,z0],[x1,MF+1.4,z0],0.05,0.05,M.rod);
+  member([x0,MF+0.9,z0],[x1,MF+0.9,z0],0.03,0.03,M.rod);
+  // 樓梯示意（由 1F 至平台）
+  const steps=16, run=0.28, rise=(MF)/steps;
+  for(let i=0;i<steps;i++){box(1.2,rise,run,M.rc,x0-0.7,rise*(i+.5),z0+0.2+run*i);}
+})();
+
+// ---------- 1F 辦公室（RC 梁 TB/TG、隔間）----------
+(function(){
+  const d=4.42, h=3.0; // 深度、淨高
+  const z0=18-d, z1=18;
+  // RC 梁 (300x600) 示意在頂部
+  box(24,0.6,0.3,M.rc,12,h-0.3+0.3,z0);
+  // 隔間牆（室內）
+  const wall=(x,z,w,dd)=>box(w,h-0.3,dd,M.wallIn,x,0.3+(h-0.3)/2,z);
+  wall(12,z0,24,0.12);             // 內側牆（含門開口另加）
+  [3.75,8.25,12,15.6,19.2].forEach(x=>wall(x,(z0+z1)/2,0.12,d)); // 隔間
+  // 門
+  [6,10.1,14,17.4].forEach(x=>box(0.9,2.1,0.16,M.door,x,0.3+1.05,z0));
+})();
+
+// ---------- 屋頂結構 ----------
+// SB1 Line A、B、C（斜梁 RH-340x250），在屋脊分兩段
+[0,9,18].forEach(z=>{
+  hMember([0,EAVE,z],[12,RIDGE,z],0.34,0.25,0.009,0.014,M.steelBeam);
+  hMember([12,RIDGE,z],[24,EAVE,z],0.34,0.25,0.009,0.014,M.steelBeam);
+});
+// SG1 Line 1、2、3（RH-340x250，水平）
+gridX.forEach(x=>hMember([x,roofY(x),0],[x,roofY(x),18],0.34,0.25,0.009,0.014,M.steelBeam));
+// Sg1 @ x=4,8,16,20（RH-244x175）
+[4,8,16,20].forEach(x=>hMember([x,roofY(x),0],[x,roofY(x),18],0.244,0.175,0.007,0.011,M.steelBeam));
+// Sb1 @ z=4.5,13.5 每 4 m 一段（RH-194x150）
+[4.5,13.5].forEach(z=>{for(let x=0;x<24;x+=4){hMember([x,roofY(x),z],[x+4,roofY(x+4),z],0.194,0.15,0.006,0.009,M.steelBeam);}});
+// SP1 屋頂短柱 RH-150x150，高 1.8，@4 m 於 Line A、C；Line B 於格線
+for(let x=0;x<=24;x+=4){[0,18].forEach(z=>hColumn(x,z,roofY(x),roofY(x)+1.8,0.15,0.15,0.007,0.011,M.steelCol,0));}
+gridX.forEach(x=>hColumn(x,9,roofY(x),roofY(x)+1.8,0.15,0.15,0.007,0.011,M.steelCol,0));
+// 屋面桁條 PR1 C-150x65 @≤800，架於 SP1 頂 (+1.8) 之屋面線 —— 沿 Z 向
+const ROOF_OFF=1.8; // 桁條在梁上 1.8 m（SP1 高度）
+const SHEET=0.12; // 屋面板再高於桁條
+for(let x=0;x<=24.001;x+=0.8){
+  const xx=Math.min(x,24);
+  member([xx,roofY(xx)+ROOF_OFF,0],[xx,roofY(xx)+ROOF_OFF,18],0.065,0.15,M.purlin);
+}
+// 屋面水平斜撐 HB1（圓桿 19Ø）示意：各格 X 形
+for(let ix=0;ix<6;ix++){for(let iz=0;iz<2;iz++){
+  const x0=ix*4,x1=x0+4,z0=iz*9,z1=z0+9;
+  member([x0,roofY(x0)+0.05,z0],[x1,roofY(x1)+0.05,z1],0.02,0.02,M.rod);
+  member([x0,roofY(x0)+0.05,z1],[x1,roofY(x1)+0.05,z0],0.02,0.02,M.rod);
+}}
+// 牆面桁條 GT1 C-150x75 @≤800（外牆四周）
+for(let y=1.0;y<EAVE+ROOF_OFF-0.3;y+=1.2){
+  member([0,y,-0.25],[24,y,-0.25],0.15,0.075,M.purlin);
+  member([0,y,18.25],[24,y,18.25],0.15,0.075,M.purlin);
+  if(y<roofY(0)+ROOF_OFF){member([-0.25,y,0],[-0.25,y,18],0.075,0.15,M.purlin); member([24.25,y,0],[24.25,y,18],0.075,0.15,M.purlin);}
+}
+
+// ---------- 外牆板 / 屋面板 ----------
+(function(){
+  // 屋面兩坡
+  const yE=EAVE+ROOF_OFF, yR=RIDGE+ROOF_OFF;
+  function slope(xa,xb){
+    const g=new THREE.BufferGeometry();
+    const v=new Float32Array([
+      xa,roofY(xa)+ROOF_OFF+SHEET,W(-0.6),  xb,roofY(xb)+ROOF_OFF+SHEET,W(-0.6),  xb,roofY(xb)+ROOF_OFF+SHEET,W(18.6),
+      xa,roofY(xa)+ROOF_OFF+SHEET,W(-0.6),  xb,roofY(xb)+ROOF_OFF+SHEET,W(18.6),  xa,roofY(xa)+ROOF_OFF+SHEET,W(18.6)]);
+    g.setAttribute('position',new THREE.BufferAttribute(v,3)); g.computeVertexNormals();
+    const m=new THREE.Mesh(g,M.roof); m.castShadow=true; m.receiveShadow=true; cladGroup.add(m);
+  }
+  slope(-0.6,12); slope(12,24.6);
+  // 屋脊蓋板
+  box(0.6,0.08,19.2,M.roof,12,yR+SHEET+0.05,9,cladGroup);
+  // 長向外牆 Line A / Line C（保留大門、窗開口）
+  function wallX(z,openings){
+    // 頂邊隨屋面坡度（屋脊在格線 2，x=12）
+    const H0=roofY(-0.3)+ROOF_OFF, H1=RIDGE+ROOF_OFF;
+    const shape=new THREE.Shape(); shape.moveTo(-0.3,0.3); shape.lineTo(24.3,0.3); shape.lineTo(24.3,H0); shape.lineTo(12,H1); shape.lineTo(-0.3,H0); shape.lineTo(-0.3,0.3);
+    openings.forEach(o=>{const p=new THREE.Path(); p.moveTo(o.x,o.y); p.lineTo(o.x+o.w,o.y); p.lineTo(o.x+o.w,o.y+o.h); p.lineTo(o.x,o.y+o.h); p.lineTo(o.x,o.y); shape.holes.push(p);});
+    const g=new THREE.ShapeGeometry(shape);
+    const m=new THREE.Mesh(g,M.clad); m.position.z=W(z); m.castShadow=true; m.receiveShadow=true; cladGroup.add(m);
+    return m;
+  }
+  // Line A：兩座大捲門 + 高窗
+  wallX(-0.35,[{x:2,y:0.3,w:8,h:5.0},{x:14,y:0.3,w:8,h:5.0},{x:1,y:6.6,w:22,h:1.4}]);
+  // Line C：辦公室窗、側門
+  wallX(18.35,[{x:1,y:1.2,w:3,h:1.5},{x:6.5,y:1.2,w:4.5,h:1.5},{x:13,y:1.2,w:4,h:1.5},{x:21.2,y:0.3,w:1.2,h:2.3},{x:1,y:6.6,w:22,h:1.4}]);
+  // 窗玻璃
+  const glass=(x,y,w,h,z)=>{const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),M.glass);m.position.set(x+w/2,y+h/2,W(z));cladGroup.add(m);};
+  glass(1,6.6,22,1.4,-0.36); glass(1,6.6,22,1.4,18.36);
+  glass(1,1.2,3,1.5,18.36); glass(6.5,1.2,4.5,1.5,18.36); glass(13,1.2,4,1.5,18.36);
+  // 捲門（半開）
+  box(8,3.0,0.08,M.door,6,6.8-1.5-0.2,-0.3,cladGroup); box(8,3.0,0.08,M.door,18,6.8-1.5-0.2,-0.3,cladGroup);
+  // 山牆 Line 1 / Line 3（含屋頂斜邊）
+  function gable(x){
+    const H0=EAVE+ROOF_OFF; // 格線 1/3 側為屋緣高，頂邊水平
+    const shape=new THREE.Shape();
+    shape.moveTo(-0.3,0.3); shape.lineTo(18.3,0.3); shape.lineTo(18.3,H0); shape.lineTo(-0.3,H0); shape.lineTo(-0.3,0.3);
+    const g=new THREE.ShapeGeometry(shape);
+    const m=new THREE.Mesh(g,M.clad); m.rotation.y=Math.PI/2; m.position.x=x; // local x → world −Z（= 模型 z 正向） m.castShadow=true; m.receiveShadow=true; cladGroup.add(m);
+  }
+  gable(-0.35); gable(24.35);
+  // 山牆與屋面間的三角是由屋頂斜坡自然遮蔽，這裡用側面封板補齊坡面外露邊
+  function eaveFascia(xa,xb,z){
+    member([xa,roofY(xa)+ROOF_OFF-0.25,z],[xb,roofY(xb)+ROOF_OFF-0.25,z],0.06,0.5,M.clad,cladGroup);
+  }
+  eaveFascia(-0.6,12,-0.6); eaveFascia(12,24.6,-0.6); eaveFascia(-0.6,12,18.6); eaveFascia(12,24.6,18.6);
+})();
+
+// ---------- 格線標註（G 切換）----------
+(function(){
+  function label(text,x,y,z){
+    const cv=document.createElement('canvas'); cv.width=128; cv.height=128;
+    const ctx=cv.getContext('2d');
+    ctx.fillStyle='rgba(255,255,255,.92)'; ctx.beginPath(); ctx.arc(64,64,56,0,Math.PI*2); ctx.fill();
+    ctx.lineWidth=6; ctx.strokeStyle='#1c2a3a'; ctx.stroke();
+    ctx.fillStyle='#1c2a3a'; ctx.font='bold 64px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(text,64,68);
+    const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(cv),depthTest:false}));
+    sp.scale.set(1.6,1.6,1); sp.position.set(x,y,W(z)); labelGroup.add(sp);
+  }
+  ['1','2','3'].forEach((t,i)=>label(t,i*12,12.8,-3));
+  ['A','B','C'].forEach((t,i)=>label(t,-3,12.8,i*9));
+  // 格線
+  const lm=new THREE.LineBasicMaterial({color:0x1c2a3a,transparent:true,opacity:.5});
+  gridX.forEach(x=>{const g=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(x,0.32,W(-3)),new THREE.Vector3(x,0.32,W(21))]);labelGroup.add(new THREE.Line(g,lm));});
+  gridZ.forEach(z=>{const g=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-3,0.32,W(z)),new THREE.Vector3(27,0.32,W(z))]);labelGroup.add(new THREE.Line(g,lm));});
+  labelGroup.visible=true;
+})();
+
+// 周邊：圍牆 CA1 + 排水溝示意（簡化）
+member([-8,0.6,-6],[32,0.6,-6],0.15,1.2,M.rc); member([-8,0.6,24],[32,0.6,24],0.15,1.2,M.rc);
+member([-8,0.6,-6],[-8,0.6,24],0.15,1.2,M.rc); member([32,0.6,-6],[32,0.6,24],0.15,1.2,M.rc);
+
+// ---------- 控制：環繞 / 縮放 / 平移 / 長按設錨點 ----------
+const anchor=new THREE.Vector3(12,4,W(9));      // 錨點（環繞中心）
+const sph={theta:0.35,phi:1.15,r:46};            // 球座標：水平角、仰角、距離
+const target={theta:sph.theta,phi:sph.phi,r:sph.r,anchor:anchor.clone()};
+const LIMIT={rMin:1.5,rMax:160,phiMin:0.05,phiMax:Math.PI-0.05};
+
+// 錨點標記
+const marker=new THREE.Group();
+(function(){
+  const ring=new THREE.Mesh(new THREE.RingGeometry(0.22,0.3,32),new THREE.MeshBasicMaterial({color:0xffdd55,side:THREE.DoubleSide,depthTest:false,transparent:true,opacity:.95}));
+  const dot=new THREE.Mesh(new THREE.SphereGeometry(0.08,16,16),new THREE.MeshBasicMaterial({color:0xffdd55,depthTest:false}));
+  ring.renderOrder=dot.renderOrder=999; marker.add(ring,dot); scene.add(marker);
+})();
+let markerPulse=0;
+
+function applyCamera(){
+  const s=Math.sin(sph.phi);
+  camera.position.set(anchor.x+sph.r*s*Math.sin(sph.theta), anchor.y+sph.r*Math.cos(sph.phi), anchor.z+sph.r*s*Math.cos(sph.theta));
+  camera.lookAt(anchor);
+  camera.near=Math.max(0.05,sph.r*0.002); camera.far=Math.max(500,sph.r*8); camera.updateProjectionMatrix();
+}
+function setView(name){
+  const V={
+    front:{a:[12,5,W(9)],t:0.0,p:1.25,r:44},
+    aerial:{a:[12,4,W(9)],t:0.6,p:0.75,r:52},
+    inside:{a:[12,5,W(9)],t:-1.2,p:1.35,r:14},
+    roof:{a:[12,9.8,W(9)],t:0.4,p:1.05,r:22},
+    mf:{a:[15,3.15,W(15.8)],t:2.5,p:1.2,r:12},
+    crane:{a:[12,6.4,W(9)],t:-0.6,p:1.3,r:16}
+  }[name]; if(!V)return;
+  target.anchor.set(...V.a); target.theta=V.t; target.phi=V.p; target.r=V.r; animating=true;
+}
+let animating=false;
+
+// 依螢幕座標找構件 → 錨點
+const ray=new THREE.Raycaster();
+function pickAnchor(cx,cy){
+  const rect=canvas.getBoundingClientRect();
+  const nd=new THREE.Vector2(((cx-rect.left)/rect.width)*2-1,-((cy-rect.top)/rect.height)*2+1);
+  ray.setFromCamera(nd,camera);
+  const list=[structure];
+  if(cladGroup.visible&&M.clad.opacity>=1)list.push(cladGroup);
+  list.push(ground);
+  const hits=ray.intersectObjects(list,true).filter(h=>h.object.visible&&h.object.material!==M.glass);
+  if(!hits.length)return false;
+  const p=hits[0].point;
+  // 保持相機位置不動、只換錨點：重算球座標
+  const camPos=camera.position.clone();
+  const d=camPos.clone().sub(p);
+  target.anchor.copy(p);
+  target.r=Math.max(LIMIT.rMin,d.length());
+  target.phi=Math.acos(THREE.MathUtils.clamp(d.y/target.r,-1,1));
+  target.theta=Math.atan2(d.x,d.z);
+  anchor.copy(p); sph.r=target.r; sph.phi=target.phi; sph.theta=target.theta;
+  markerPulse=1;
+  if(navigator.vibrate)navigator.vibrate(30);
+  toast('已設定錨點');
+  return true;
+}
+
+// ---- 指標事件（觸控 + 滑鼠統一用 Pointer Events）----
+const pts=new Map(); // pointerId -> {x,y}
+let mode=null;       // 'rotate' | 'pan' | 'pinch'
+let lastPinch=null;  // {dist, cx, cy}
+let pressTimer=null, pressStart=null, moved=false;
+const LONG_PRESS=500, MOVE_TOL=8;
+
+function clearPress(){if(pressTimer){clearTimeout(pressTimer);pressTimer=null;}}
+canvas.addEventListener('pointerdown',e=>{
+  try{canvas.setPointerCapture(e.pointerId);}catch(_){}
+  pts.set(e.pointerId,{x:e.clientX,y:e.clientY,btn:e.button});
+  animating=false; moved=false;
+  if(pts.size===1){
+    mode=(e.pointerType==='mouse'&&(e.button===2||e.button===1))?'pan':'rotate';
+    pressStart={x:e.clientX,y:e.clientY};
+    clearPress();
+    pressTimer=setTimeout(()=>{pressTimer=null; if(!moved&&pts.size===1){pickAnchor(pressStart.x,pressStart.y); mode='rotate';}},LONG_PRESS);
+  }else if(pts.size===2){
+    clearPress(); mode='pinch';
+    const [a,b]=[...pts.values()];
+    lastPinch={dist:Math.hypot(a.x-b.x,a.y-b.y),cx:(a.x+b.x)/2,cy:(a.y+b.y)/2};
+  }else{clearPress();}
+});
+canvas.addEventListener('pointermove',e=>{
+  const p=pts.get(e.pointerId); if(!p)return;
+  const dx=e.clientX-p.x, dy=e.clientY-p.y;
+  if(pressStart&&Math.hypot(e.clientX-pressStart.x,e.clientY-pressStart.y)>MOVE_TOL){moved=true;clearPress();}
+  if(mode==='rotate'&&pts.size===1){
+    const k=(e.pointerType==='touch')?0.006:0.005;
+    sph.theta-=dx*k; sph.phi-=dy*k;
+    sph.phi=THREE.MathUtils.clamp(sph.phi,LIMIT.phiMin,LIMIT.phiMax);
+  }else if(mode==='pan'&&pts.size===1){
+    panBy(dx,dy);
+  }else if(mode==='pinch'&&pts.size===2){
+    p.x=e.clientX; p.y=e.clientY;
+    const [a,b]=[...pts.values()];
+    const dist=Math.hypot(a.x-b.x,a.y-b.y), cx=(a.x+b.x)/2, cy=(a.y+b.y)/2;
+    if(lastPinch){
+      const scale=lastPinch.dist/Math.max(1,dist);
+      sph.r=THREE.MathUtils.clamp(sph.r*scale,LIMIT.rMin,LIMIT.rMax);
+      panBy(cx-lastPinch.cx,cy-lastPinch.cy);
+    }
+    lastPinch={dist,cx,cy};
+    return;
+  }
+  p.x=e.clientX; p.y=e.clientY;
+});
+function endPointer(e){
+  pts.delete(e.pointerId); clearPress(); pressStart=null;
+  if(pts.size===0){mode=null;lastPinch=null;}
+  else if(pts.size===1){mode='rotate';lastPinch=null;}
+}
+canvas.addEventListener('pointerup',endPointer);
+canvas.addEventListener('pointercancel',endPointer);
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+canvas.addEventListener('wheel',e=>{
+  e.preventDefault(); animating=false;
+  const f=Math.exp(e.deltaY*0.0012);
+  sph.r=THREE.MathUtils.clamp(sph.r*f,LIMIT.rMin,LIMIT.rMax);
+},{passive:false});
+canvas.addEventListener('dblclick',e=>pickAnchor(e.clientX,e.clientY));
+
+// 平移：以螢幕像素換算為錨點在相機平面上的位移
+function panBy(dx,dy){
+  const rect=canvas.getBoundingClientRect();
+  const h=2*sph.r*Math.tan(THREE.MathUtils.degToRad(camera.fov/2));
+  const per=h/rect.height;
+  const right=new THREE.Vector3(), up=new THREE.Vector3();
+  camera.matrixWorld.extractBasis(right,up,new THREE.Vector3());
+  anchor.addScaledVector(right,-dx*per).addScaledVector(up,dy*per);
+  target.anchor.copy(anchor);
+}
+
+// ---- 工具列 ----
+const bar=document.getElementById('bar'), viewsEl=document.getElementById('views');
+const hud=document.getElementById('hud'), legend=document.getElementById('legend');
+let cladMode=0, uiHidden=false;
+function applyClad(){
+  const op=[1,0.28,0][cladMode];
+  cladGroup.visible=op>0;
+  [M.clad,M.roof].forEach(m=>{m.opacity=op;m.depthWrite=op>=1;m.needsUpdate=true;});
+  M.glass.opacity=0.35*op;
+  bar.querySelector('[data-act="clad"]').textContent=['外牆 ●','外牆 ◐','外牆 ○'][cladMode];
+}
+applyClad();
+bar.addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b)return;
+  const act=b.dataset.act;
+  if(act==='clad'){cladMode=(cladMode+1)%3;applyClad();}
+  if(act==='grid'){labelGroup.visible=!labelGroup.visible;}
+  if(act==='views'){viewsEl.classList.toggle('open');}
+  if(act==='ui'){uiHidden=!uiHidden;hud.classList.toggle('hide',uiHidden);legend.classList.toggle('hide',uiHidden);b.textContent=uiHidden?'顯示說明':'隱藏說明';}
+  if(act==='reset'){setView('aerial');}
+});
+viewsEl.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;setView(b.dataset.v);viewsEl.classList.remove('open');});
+// 桌機鍵盤：R 重設、T 外牆、G 格線
+window.addEventListener('keydown',e=>{
+  if(e.code==='KeyR')setView('aerial');
+  if(e.code==='KeyT'){cladMode=(cladMode+1)%3;applyClad();}
+  if(e.code==='KeyG')labelGroup.visible=!labelGroup.visible;
+});
+const toastEl=document.getElementById('toast'); let toastT=null;
+function toast(msg){toastEl.textContent=msg;toastEl.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>toastEl.classList.remove('show'),1200);}
+
+// ---------- 迴圈 ----------
+const posEl=document.getElementById('pos');
+let last=performance.now();
+function resize(){
+  const w=innerWidth,h=innerHeight;
+  renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix();
+}
+addEventListener('resize',resize); resize();
+setView('aerial'); sph.theta=target.theta; sph.phi=target.phi; sph.r=target.r; anchor.copy(target.anchor); animating=false;
+
+function tick(now){
+  const dt=Math.min(0.1,(now-last)/1000); last=now;
+  if(animating){
+    const k=1-Math.exp(-dt*5);
+    sph.theta+=(target.theta-sph.theta)*k; sph.phi+=(target.phi-sph.phi)*k; sph.r+=(target.r-sph.r)*k;
+    anchor.lerp(target.anchor,k);
+    if(Math.abs(target.r-sph.r)<0.01&&anchor.distanceTo(target.anchor)<0.01)animating=false;
+  }
+  applyCamera();
+  marker.position.copy(anchor);
+  marker.quaternion.copy(camera.quaternion);
+  const sc=(0.02*sph.r+0.2)*(1+markerPulse*0.8); marker.scale.setScalar(sc);
+  markerPulse=Math.max(0,markerPulse-dt*3);
+  posEl.textContent=`錨點：格線1→3 ${anchor.x.toFixed(1)} m／A→C ${(-anchor.z).toFixed(1)} m／高 GL+${anchor.y.toFixed(1)} m　距離 ${sph.r.toFixed(1)} m`;
+  renderer.render(scene,camera);
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
