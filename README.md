@@ -1,4 +1,4 @@
-# 鋼構 3D 展示
+# 3D 展示
 
 3D 模型展示站，GitHub Pages：<https://ianyuchuang.github.io/3d/>
 
